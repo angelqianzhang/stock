@@ -6,8 +6,8 @@ import pandas as pd
 import requests
 import json
 
-startDate = '20240901'
-endDate = '20250924'
+startDate = '20250901'
+endDate = '20251227'
 # def get_hs300_list():
 #     url = "http://push2.eastmoney.com/api/qt/clist/get"
 #     params = {
@@ -78,7 +78,7 @@ def filter_stocks_and_plot(all_stock_dfs):
     ma5_list = []
     ma20_list = []
     ma60_list = []
-    selected_stocks = all_stock_dfs[(all_stock_dfs["stock_code"]!=600519)&(all_stock_dfs["日期"]=="2025-09-24")&(all_stock_dfs["MA5"]>=all_stock_dfs["MA20"])&(all_stock_dfs["MA20"]>=all_stock_dfs["MA60"])] 
+    selected_stocks = all_stock_dfs[(all_stock_dfs["stock_code"]!=600519)&(all_stock_dfs["日期"]=="2025-12-26")&(all_stock_dfs["MA5"]>=all_stock_dfs["MA20"])&(all_stock_dfs["MA20"]>=all_stock_dfs["MA60"])] 
    #&(all_stock_dfs["收盘"]>=all_stock_dfs["MA5"])
     # 畫圖
     x = range(len(selected_stocks))
