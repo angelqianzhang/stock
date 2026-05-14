@@ -4,6 +4,7 @@ import time
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
 import adata
+import inspect
 # 获取平安银行2021年至今日线（自动前复权）
 
 # Chinese-capable font for plot labels (Windows: Microsoft YaHei / SimHei)
@@ -13,15 +14,18 @@ font = FontProperties(family=['Microsoft YaHei', 'SimHei', 'sans-serif'])
 
 # Set your date range here (format: YYYYMMDD)
 START_DATE = '2025-09-02'
-END_DATE = '2026-02-13'
+END_DATE = '2026-05-12'
 
 # Read stock list
 
 def get_month_k_with_ma(stock_code, stock_name):
     # 取月K線
     print(stock_code)
+    print(inspect.getsourcefile(adata.stock.market.get_market))
+    print(inspect.signature(adata.stock.market.get_market))
     df = adata.stock.market.get_market(stock_code=str(stock_code), k_type=1, start_date=START_DATE)
     if df.empty:
+        print("no data return")
         return None
     
     # 按日期排序
@@ -38,7 +42,7 @@ def get_month_k_with_ma(stock_code, stock_name):
 
 
 def get_stock_list():
-    stock_list = pd.read_csv('hs300_list_new.csv', dtype={'成分券代码': str})
+    stock_list = pd.read_csv('output/hs300_list_new.csv', dtype={'成分券代码': str})
   
     all_results = pd.DataFrame()
 
@@ -50,7 +54,7 @@ def get_stock_list():
         print(stock_name)
         time.sleep(0.5)
 
-    all_results.to_csv('hs300_month_k_with_ma_'+START_DATE+'_'+END_DATE+'.csv', index=False, encoding='utf-8-sig')
+    all_results.to_csv('output/hs300_month_k_with_ma_'+START_DATE+'_'+END_DATE+'.csv', index=False)
     print('Saved to /hs300_month_k_with_ma_'+START_DATE+'_'+END_DATE+'.csv')
 
 # --- Plotting Section ---
@@ -60,7 +64,7 @@ def filter_stocks_and_plot():
     ma5_list = []
     ma20_list = []
     ma60_list = []
-    all_stock_dfs = pd.read_csv('hs300_month_k_with_ma_'+START_DATE+'_'+END_DATE+'.csv', dtype={'stock_code': str})
+    all_stock_dfs = pd.read_csv('output/hs300_month_k_with_ma_'+START_DATE+'_'+END_DATE+'.csv', dtype={'stock_code': str})
     selected_stocks =all_stock_dfs[(all_stock_dfs["stock_code"]!='600519')&(all_stock_dfs["trade_date"]==END_DATE)&(all_stock_dfs["MA5"]>=all_stock_dfs["MA20"])&(all_stock_dfs["MA20"]>=all_stock_dfs["MA60"])] 
  
     x = range(len(selected_stocks))
@@ -81,7 +85,7 @@ def filter_stocks_and_plot():
 
 def pct_change_above_1_by_stock():
     """Read CSV and compute, for each stock, the percentage of days where change_pct > 1."""
-    df = pd.read_csv('hs300_month_k_with_ma_'+START_DATE+'_'+END_DATE+'.csv', dtype={'stock_code': str})
+    df = pd.read_csv('output/hs300_month_k_with_ma_'+START_DATE+'_'+END_DATE+'.csv', dtype={'stock_code': str})
     # Compute change_pct within each stock (first day per stock is NaN)
     df = df.sort_values(['stock_code', 'trade_date'])
     # For each stock: count rows with change_pct > 1 and total valid change_pct rows
@@ -112,12 +116,13 @@ def plot_pct_above_1_bar_chart(pct_df):
 
 
 if __name__ == '__main__':
-    # get_stock_list()
+    get_stock_list()
     # filter_stocks_and_plot()
+
     # Percentage of days with change_pct > 1 for each stock
-    pct_df = pct_change_above_1_by_stock()
-    print(pct_df)
-    pct_df.to_csv('hs300_pct_above_1_'+START_DATE+'_'+END_DATE+'.csv', index=False, encoding='utf-8-sig')
-    # Only plot stocks with percentage >= 40
-    plot_pct_above_1_bar_chart(pct_df[pct_df['pct_above_1'] >= 23])
+    # pct_df = pct_change_above_1_by_stock()
+    # print(pct_df)
+    # pct_df.to_csv('hs300_pct_above_1_'+START_DATE+'_'+END_DATE+'.csv', index=False, encoding='utf-8-sig')
+    # # Only plot stocks with percentage >= 40
+    # plot_pct_above_1_bar_chart(pct_df[pct_df['pct_above_1'] >= 23])
  
