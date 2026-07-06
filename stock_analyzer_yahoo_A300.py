@@ -9,13 +9,14 @@ import yfinance as yf
 import pandas as pd
 from pathlib import Path
 import numpy as np
-startDate = '2025-09-01'
-endDate = '2026-05-13'
-as_of_date = '2026-05-12'
+startDate = '2026-01-01'
+endDate = '2026-07-06'
+as_of_date = '2026-07-03'
+
 def download_and_save_csv(
     stock_list,
     tickers,
-    start="2025-09-01",
+    start=startDate,
     end=None,
     filename=f"output/hs300_history_{startDate}_{endDate}.csv",
     auto_adjust=True
@@ -183,7 +184,33 @@ def _candlestick_weekly(ax, weekly: pd.DataFrame, title: str):
     ax.grid(True, alpha=0.25)
 
 
-def filter_stocks_and_plot(all_stock_dfs):
+def _candlestick_daily(ax, daily: pd.DataFrame, title: str):
+    """Draw OHLC candles on ax; daily has columns Date, Open, High, Low, Close."""
+    o = daily["Open"].to_numpy()
+    h = daily["High"].to_numpy()
+    l = daily["Low"].to_numpy()
+    c = daily["Close"].to_numpy()
+    xs = np.arange(len(daily))
+    for xi, oi, hi, li, ci in zip(xs, o, h, l, c):
+        color = "#26a69a" if ci >= oi else "#ef5350"
+        ax.plot([xi, xi], [li, hi], color="black", linewidth=0.7)
+        bottom = min(oi, ci)
+        top = max(oi, ci)
+        ax.bar(xi, top - bottom, bottom=bottom, width=0.65, color=color, edgecolor="black", linewidth=0.4)
+    ax.set_xticks(xs[:: max(1, len(xs) // 6)])
+    ax.set_xticklabels(
+        [pd.Timestamp(t).strftime("%Y-%m-%d") for t in daily["Date"].iloc[:: max(1, len(xs) // 6)]],
+        rotation=35,
+        ha="right",
+        fontsize=7,
+    )
+    ax.set_title(title, fontproperties=font, fontsize=10)
+    ax.grid(True, alpha=0.25)
+
+
+def filter_stocks_and_plot():
+    all_stock_dfs = pd.read_csv(f"output/hs300_sample_with_ma_{startDate}_{endDate}.csv")
+    all_stock_dfs["Date"] = pd.to_datetime(all_stock_dfs["Date"])
     selected_stocks = []
     ma5_list = []
     ma20_list = []
@@ -207,7 +234,7 @@ def filter_stocks_and_plot(all_stock_dfs):
     plt.tight_layout()
     plt.show()
 
-def plot_ma5_trends(as_of_date=as_of_date):
+def plot_ma5_trends_weekly(as_of_date=as_of_date):
     """Weekly candlestick chart for every ticker that passes the MA filter on as_of_date."""
     all_stock_dfs = pd.read_csv(f"output/hs300_sample_with_ma_{startDate}_{endDate}.csv")
     all_stock_dfs["Date"] = pd.to_datetime(all_stock_dfs["Date"])
@@ -242,10 +269,44 @@ def plot_ma5_trends(as_of_date=as_of_date):
     plt.tight_layout()
     plt.show()
 
+def plot_ma5_trends_daily(as_of_date=as_of_date):
+    """Weekly candlestick chart for every ticker that passes the MA filter on as_of_date."""
+    all_stock_dfs = pd.read_csv(f"output/hs300_sample_with_ma_{startDate}_{endDate}.csv")
+    all_stock_dfs["Date"] = pd.to_datetime(all_stock_dfs["Date"])
+    selected_stocks = all_stock_dfs[_ma_filter_mask(all_stock_dfs, as_of_date=as_of_date)]
+    tickers = selected_stocks["成分券名称"].drop_duplicates().tolist()
+    if not tickers:
+        print("No tickers selected; check as_of_date and MA filters.")
+        return
+
+    n = len(tickers)
+    ncols = min(4, n)
+    nrows = int(np.ceil(n / ncols))
+    # figsize in inches: increase 5.5 / 4.5 for larger subplots (was 4.2 / 3.4)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5.5 * ncols, 4.5 * nrows), squeeze=False)
+    fig.suptitle("Weekly candlesticks (MA5 ≥ MA20 ≥ MA60 on " + str(as_of_date) + ")", fontproperties=font, fontsize=12)
+
+    for idx, ticker in enumerate(tickers):
+        r, c = divmod(idx, ncols)
+        ax = axes[r][c]
+        daily = all_stock_dfs[all_stock_dfs["成分券名称"] == ticker][["Date", "Open", "High", "Low", "Close", "Volume"]].copy()
+        daily = daily.dropna(subset=["Open", "High", "Low", "Close"])
+        if daily.empty:
+            ax.set_visible(False)
+            continue
+        _candlestick_daily(ax, daily, str(ticker))
+
+    for j in range(n, nrows * ncols):
+        r, c = divmod(j, ncols)
+        axes[r][c].set_visible(False)
+
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
-    # getting_hs300_data()
-    # df = calculate_ma_for_hs300_data()
-    # filter_stocks_and_plot(df)
-    ## can only run this after you get the data and calculate the ma 
-    plot_ma5_trends()
+    getting_hs300_data()
+    calculate_ma_for_hs300_data()
+    # filter_stocks_and_plot()
+    # can only run this after you get the data and calculate the ma 
+    # plot_ma5_trends_weekly()
+    plot_ma5_trends_daily()

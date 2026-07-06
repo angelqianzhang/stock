@@ -4,17 +4,17 @@ from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 # import seaborn as sns
 
-import pandas as pd
+import numpy as np
 import yfinance as yf
-import pandas as pd
 from pathlib import Path
 
-startDate = '2025-09-01'
-endDate = '2026-05-12'
+startDate = '2026-01-01'
+endDate = '2026-07-03'
+as_of_date = '2026-07-02'
 
 def download_and_save_csv(
     tickers,
-    start="2025-09-01",
+    start=startDate,
     end=None,
     filename=f"output/nasdaq_history_{startDate}_{endDate}.csv",
     auto_adjust=True
@@ -131,12 +131,54 @@ def calculate_ma_for_nasdaq_data():
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
 font = FontProperties(fname="C:/Windows/Fonts/simhei.ttf")
-def filter_stocks_and_plot(all_stock_dfs):
+def _ma_filter_mask(df, as_of_date=as_of_date):
+    # d = pd.to_datetime(df["Date"]).dt.normalize()
+    print(df["Date"])
+    print(as_of_date)
+    # selected_stocks = all_stock_dfs[(all_stock_dfs["Date"]=="2026-02-06")&(all_stock_dfs["MA5"]>=all_stock_dfs["MA20"])&(all_stock_dfs["MA20"]>=all_stock_dfs["MA60"])] 
+   
+    return (df["Date"] == as_of_date) & (df["MA5"] >= df["MA20"]) & (df["MA20"] >= df["MA60"])
+
+
+def _daily_to_weekly(daily: pd.DataFrame) -> pd.DataFrame:
+    """Resample single-ticker daily OHLC to weekly (week ending Friday)."""
+    x = daily.sort_values("Date").set_index("Date")
+    w = x.resample("W-FRI").agg(
+        {"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"}
+    )
+    return w.dropna(subset=["Open", "High", "Low", "Close"]).reset_index()
+
+
+def _candlestick_weekly(ax, weekly: pd.DataFrame, title: str):
+    """Draw OHLC candles on ax; weekly has columns Date, Open, High, Low, Close."""
+    o = weekly["Open"].to_numpy()
+    h = weekly["High"].to_numpy()
+    l = weekly["Low"].to_numpy()
+    c = weekly["Close"].to_numpy()
+    xs = np.arange(len(weekly))
+    for xi, oi, hi, li, ci in zip(xs, o, h, l, c):
+        color = "#26a69a" if ci >= oi else "#ef5350"
+        ax.plot([xi, xi], [li, hi], color="black", linewidth=0.7)
+        bottom = min(oi, ci)
+        top = max(oi, ci)
+        ax.bar(xi, top - bottom, bottom=bottom, width=0.65, color=color, edgecolor="black", linewidth=0.4)
+    ax.set_xticks(xs[:: max(1, len(xs) // 6)])
+    ax.set_xticklabels(
+        [pd.Timestamp(t).strftime("%Y-%m-%d") for t in weekly["Date"].iloc[:: max(1, len(xs) // 6)]],
+        rotation=35,
+        ha="right",
+        fontsize=7,
+    )
+    ax.set_title(title, fontproperties=font, fontsize=10)
+    ax.grid(True, alpha=0.25)
+
+def filter_stocks_and_plot():
+    all_stock_dfs = pd.read_csv(f"output/nasdaq_sample_with_ma_{startDate}_{endDate}.csv")
     selected_stocks = []
     ma5_list = []
     ma20_list = []
     ma60_list = []
-    selected_stocks = all_stock_dfs[(all_stock_dfs["Date"]==endDate)&(all_stock_dfs["MA5"]>=all_stock_dfs["MA20"])&(all_stock_dfs["MA20"]>=all_stock_dfs["MA60"])] 
+    selected_stocks = all_stock_dfs[(all_stock_dfs["Date"]==as_of_date)&(all_stock_dfs["MA5"]>=all_stock_dfs["MA20"])&(all_stock_dfs["MA20"]>=all_stock_dfs["MA60"])] 
    #&(all_stock_dfs["收盘"]>=all_stock_dfs["MA5"])
     # 畫圖
     x = range(len(selected_stocks))
@@ -155,7 +197,44 @@ def filter_stocks_and_plot(all_stock_dfs):
     plt.tight_layout()
     plt.show()
 
+def plot_ma5_trends(as_of_date=as_of_date):
+    """Weekly candlestick chart for every ticker that passes the MA filter on as_of_date."""
+    all_stock_dfs = pd.read_csv(f"output/nasdaq_sample_with_ma_{startDate}_{endDate}.csv")
+    all_stock_dfs["Date"] = pd.to_datetime(all_stock_dfs["Date"])
+    selected_stocks = all_stock_dfs[_ma_filter_mask(all_stock_dfs, as_of_date=as_of_date)]
+    tickers = selected_stocks["Ticker"].drop_duplicates().tolist()
+    if not tickers:
+        print("No tickers selected; check as_of_date and MA filters.")
+        return
+
+    n = len(tickers)
+    ncols = min(4, n)
+    nrows = int(np.ceil(n / ncols))
+    # figsize in inches: increase 5.5 / 4.5 for larger subplots (was 4.2 / 3.4)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5.5 * ncols, 4.5 * nrows), squeeze=False)
+    fig.suptitle("Weekly candlesticks (MA5 ≥ MA20 ≥ MA60 on " + str(as_of_date) + ")", fontproperties=font, fontsize=12)
+
+    for idx, ticker in enumerate(tickers):
+        r, c = divmod(idx, ncols)
+        ax = axes[r][c]
+        daily = all_stock_dfs[all_stock_dfs["Ticker"] == ticker][["Date", "Open", "High", "Low", "Close", "Volume"]].copy()
+        daily = daily.dropna(subset=["Open", "High", "Low", "Close"])
+        weekly = _daily_to_weekly(daily)
+        if weekly.empty:
+            ax.set_visible(False)
+            continue
+        _candlestick_weekly(ax, weekly, str(ticker))
+
+    for j in range(n, nrows * ncols):
+        r, c = divmod(j, ncols)
+        axes[r][c].set_visible(False)
+
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == "__main__":
-    getting_nasdaq_data()
-    df = calculate_ma_for_nasdaq_data()
-    filter_stocks_and_plot(df)
+    # getting_nasdaq_data()
+    # df = calculate_ma_for_nasdaq_data()
+    filter_stocks_and_plot()
+    ## can only run this after you get the data and calculate the ma 
+    # plot_ma5_trends()
