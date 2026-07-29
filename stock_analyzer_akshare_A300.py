@@ -3,6 +3,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 # import seaborn as sns
+import akshare as ak
+import time
 
 import pandas as pd
 import yfinance as yf
@@ -17,89 +19,165 @@ def download_and_save_csv(
     stock_list,
     tickers,
     start=startDate,
-    end=None,
+    end=endDate,
     filename=f"output/hs300_history_{startDate}_{endDate}.csv",
-    auto_adjust=True
+    adjust="qfq",   # "qfq", "hfq", or ""
 ):
     """
-    Download historical stock data from Yahoo Finance and save to CSV (long format).
+    Download historical A-share data from AKShare and save to CSV.
 
     Parameters
     ----------
+    stock_list : DataFrame
+        Must contain:
+            stock_code_full
+            成分券代码
+            成分券名称
+
     tickers : list[str]
-        List of stock tickers, e.g. ["AAPL", "MSFT"]
+        Example:
+            ["000001", "600519"]
+
     start : str
-        Start date, e.g. "2015-01-01"
-    end : str or None
-        End date, e.g. "2024-12-31"
-    filename : str
-        Output CSV file name
-    auto_adjust : bool
-        Whether to auto-adjust prices
+        Format: YYYYMMDD
+
+    end : str
+        Format: YYYYMMDD
+
+    adjust : str
+        "", "qfq", or "hfq"
     """
 
     if not isinstance(tickers, list):
-        raise TypeError("tickers must be a list, e.g. ['AAPL', 'MSFT']")
+        raise TypeError("tickers must be a list.")
 
-    # Fix tickers like BRK.B → BRK-B
-    # tickers = [t.replace(".", "-") for t in tickers]
+    print(f"Downloading {len(tickers)} stocks...")
 
-    print(f"Downloading {len(tickers)} tickers...")
-    data = yf.download(
-        tickers,
-        start=start,
-        end=end,
-        auto_adjust=auto_adjust,
-        group_by="ticker",
-        threads=True,
-        progress=True
+    all_data = []
+
+    # import akshare as ak
+
+    # df = ak.stock_zh_a_hist(
+    #     symbol="000001",
+    #     period="daily",
+    #     start_date="20240101",
+    #     end_date="20241231",
+    #     adjust="qfq"
+    # )
+
+    # print(df.head())
+    # print(df.shape)
+
+
+    for symbol in tickers:
+        print(f"Downloading {symbol}...")
+        print(f"Start: {start}, End: {end}, Adjust: {adjust}")
+
+        try:
+            df = ak.stock_zh_a_hist(
+                symbol=symbol,
+                period="daily",
+                start_date=start,
+                end_date=end,
+                adjust=adjust,
+            )
+
+            if df.empty:
+                print(f"No data for {symbol}")
+                continue
+
+            # Rename columns to match yfinance output
+            df = df.rename(
+                columns={
+                    "日期": "Date",
+                    "开盘": "Open",
+                    "最高": "High",
+                    "最低": "Low",
+                    "收盘": "Close",
+                    "成交量": "Volume",
+                }
+            )
+
+            df["Ticker"] = symbol
+
+            all_data.append(
+                df[
+                    [
+                        "Date",
+                        "Ticker",
+                        "Open",
+                        "High",
+                        "Low",
+                        "Close",
+                        "Volume",
+                    ]
+                ]
+            )
+
+            print(f"Downloaded {symbol} ({len(df)} rows)")
+
+            # Prevent rate limiting
+            time.sleep(0.2)
+
+        except Exception as e:
+            print(f"Failed {symbol}: {e}")
+
+    if not all_data:
+        raise ValueError("No data downloaded.")
+
+    df = pd.concat(all_data, ignore_index=True)
+
+    # Merge with stock names
+    df_merged = pd.merge(
+        df,
+        stock_list,
+        left_on="Ticker",
+        right_on="stock_code_full",
+        how="left",
     )
 
-    if data.empty:
-        raise ValueError("No data downloaded. Check tickers or date range.")
+    cols = [
+        "Date",
+        "Ticker",
+        "Open",
+        "High",
+        "Low",
+        "Close",
+        "Volume",
+        "成分券代码",
+        "成分券名称",
+    ]
 
-    # ---- normalize to long format ----
-    if len(tickers) > 1:
-        df = (
-            data
-            .stack(level=0)
-            .reset_index()
-            .rename(columns={"level_1": "Ticker"})
-        )
-    else:
-        df = data.reset_index()
-        df["Ticker"] = tickers[0]
-
-    df_merged = pd.merge(df, stock_list, left_on="Ticker", right_on="stock_code_full", how="left")
-    # Reorder columns
-    cols = ["Date", "Ticker", "Open", "High", "Low", "Close", "Volume", "成分券代码", "成分券名称"]
     df_merged = df_merged[cols]
 
-    # Save
     Path(filename).parent.mkdir(parents=True, exist_ok=True)
-    df_merged.to_csv(filename, index=False)
+    df_merged.to_csv(filename, index=False, encoding="utf-8-sig")
 
     print(f"Saved to {filename}")
+
     return df_merged
 
 def getting_hs300_data():
     # url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
     # sp500 = pd.read_excel("output/sp500.xlsx")
     stock_list = pd.read_csv('output/hs300_list_new.csv', dtype={'成分券代码': str})
-    stock_list['stock_code_full'] = np.where(
-    stock_list['交易所英文名称'] == "Shanghai Stock Exchange", 
-    stock_list['成分券代码'] + ".SS", 
-    stock_list['成分券代码'] + ".SZ")
- 
+    # stock_list['stock_code_full'] = np.where(
+    # stock_list['交易所英文名称'] == "Shanghai Stock Exchange", 
+    # stock_list['成分券代码'] + ".SS", 
+    # stock_list['成分券代码'] + ".SZ")
+    stock_list['stock_code_full'] = stock_list['成分券代码']
+
     tickers = stock_list["stock_code_full"].tolist()
    
     # tickers = [t.replace('.', '-') for t in tickers]
+    start = startDate.replace("-", "")
+    end = endDate.replace("-", "")
 
     df = download_and_save_csv(
         stock_list,
         tickers,
-        start=startDate,
-        end=endDate,
+        start=start,
+        end=end,
         filename=f"output/hs300_sample_{startDate}_{endDate}.csv"
     )
 
@@ -310,3 +388,7 @@ if __name__ == "__main__":
     # can only run this after you get the data and calculate the ma 
     # plot_ma5_trends_weekly()
     plot_ma5_trends_daily()
+
+
+
+    

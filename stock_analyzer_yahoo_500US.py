@@ -3,14 +3,15 @@ import pandas as pd
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 # import seaborn as sns
+import requests
 
 import numpy as np
 import yfinance as yf
 from pathlib import Path
 
-startDate = '2026-01-01'
-endDate = '2026-07-03'
-as_of_date = '2026-07-02'
+startDate = '2026-04-01'
+endDate = '2026-07-12'
+as_of_date = '2026-07-11'
 
 def download_and_save_csv(
     tickers,
@@ -233,8 +234,23 @@ def plot_ma5_trends(as_of_date=as_of_date):
     plt.show()
 
 if __name__ == "__main__":
+
+    print(yf.download("AAPL", period="1mo"))
+    print(yf.__version__)
+    print(requests.__version__)
     # getting_nasdaq_data()
     # df = calculate_ma_for_nasdaq_data()
-    filter_stocks_and_plot()
-    ## can only run this after you get the data and calculate the ma 
+    # # filter_stocks_and_plot()
+    # ## can only run this after you get the data and calculate the ma 
     # plot_ma5_trends()
+
+    # url = "https://query1.finance.yahoo.com/v8/finance/chart/MO"
+    # r = requests.get(
+    #     url,
+    #     params={"range": "1mo", "interval": "1d"},
+    #     timeout=30,
+    # )
+
+    # print(r.status_code)
+    # print(r.headers.get("Content-Type"))
+    # print(r.text[:200])
